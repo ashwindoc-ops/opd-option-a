@@ -1,314 +1,309 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+  .opd-wrap { max-width: 1400px; margin: 0 auto; }
+  .opd-header { background: #1e3a5f; color: #fff; border-radius: 8px; padding: 10px 14px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+  .opd-header a, .opd-header button { font-size: 12px; }
+  .btn-save { background: #e8a317; color: #1a1a1a; font-weight: 700; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; }
+  .btn-save:hover { background: #f0b42a; }
+  .btn-ghost { background: transparent; color: #dbeafe; border: 1px solid #4b6a8a; padding: 5px 10px; border-radius: 6px; text-decoration: none; }
+  .btn-ghost:hover { background: #2a4a6f; color: #fff; }
+  .panel { border: 1px solid #d1d5db; border-radius: 8px; background: #fff; padding: 10px; height: 100%; }
+  .panel-title { font-size: 12px; font-weight: 700; color: #1e3a5f; margin-bottom: 6px; letter-spacing: 0.02em; }
+  .field-label { font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 2px; display: block; }
+  .field { width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .num { color: #1e3a5f; font-weight: 700; margin-right: 4px; }
+  details.hist summary { cursor: pointer; font-size: 12px; color: #1e3a5f; font-weight: 600; padding: 6px 0; }
+  .rx-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rx-table th { background: #f1f5f9; border: 1px solid #e2e8f0; padding: 4px 6px; text-align: left; }
+  .rx-table td { border: 1px solid #e2e8f0; padding: 2px; }
+  .rx-table input { width: 100%; border: none; padding: 4px; font-size: 12px; outline: none; }
+  .vital-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .lab-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 8px; margin-top: 8px; }
+</style>
+
 {% if saved %}
-<div class="mb-2 border-2 border-green-500 bg-green-50 text-green-900 rounded px-3 py-2 text-sm font-semibold flex flex-wrap items-center gap-3">
+<div class="mb-2 border-2 border-green-500 bg-green-50 text-green-900 rounded px-3 py-2 text-sm font-semibold">
   Consultation saved ✓
-  {% if visit_id %}
-  <button type="button" onclick="printRxSelected()" class="underline text-indigo-700 font-bold">Print Rx now</button>
-  {% endif %}
+  {% if visit_id %}<button type="button" onclick="printRxSelected()" class="underline text-indigo-700 font-bold ml-2">Print Rx now</button>{% endif %}
 </div>
 {% endif %}
 {% if allergy_block %}
-<div class="mb-2 bg-red-200 border-2 border-red-600 text-red-900 px-3 py-2 rounded text-sm font-bold">
-  SAVE BLOCKED — ALLERGY CONFLICT: {{ allergy_msg }}
-</div>
+<div class="mb-2 bg-red-200 border-2 border-red-600 text-red-900 px-3 py-2 rounded text-sm font-bold">SAVE BLOCKED — {{ allergy_msg }}</div>
 {% endif %}
 {% if same_day_visit %}
 <div class="mb-2 bg-yellow-100 border border-yellow-400 text-yellow-900 px-3 py-2 rounded text-xs">
   Already seen today ({{ same_day_visit['visit_date'] }}{% if same_day_visit['diagnosis'] %} · {{ same_day_visit['diagnosis'] }}{% endif %}).
   <button type="button" onclick="loadSameDayData()" class="ml-2 bg-yellow-600 text-white px-2 py-0.5 rounded text-xs">Load today’s data</button>
-  <a href="/opd?patient_id={{ patient['patient_id'] }}&visit_id={{ same_day_visit['visit_id'] }}" class="ml-1 underline">Open that visit</a>
 </div>
-<script>
-var sameDayMeds = {{ same_day_meds|tojson }};
-function loadSameDayData() {
-  if (sameDayMeds && sameDayMeds.length) sameDayMeds.forEach(function(m){ addMedicineRow(m); });
-  alert('Previous medicines loaded. Review before saving.');
-}
-</script>
+<script>var sameDayMeds={{ same_day_meds|tojson }};function loadSameDayData(){if(sameDayMeds&&sameDayMeds.length)sameDayMeds.forEach(function(m){addMedicineRow(m);});alert('Previous medicines loaded.');}</script>
 {% endif %}
 
 {% if patient %}
-<form method="post" action="/opd/save" class="h-full" id="opdForm" onsubmit="return opdBeforeSave()">
+<div class="opd-wrap">
+<form method="post" action="/opd/save" id="opdForm" onsubmit="return opdBeforeSave()">
 <input type="hidden" name="patient_id" value="{{ patient['patient_id'] }}">
 <input type="hidden" name="visit_id" value="{{ visit_id or '' }}">
 <input type="hidden" name="doctor" value="{{ doctor_name or (visit.get('doctor') if visit else '') or 'Dr. Ashwin Udyavar' }}">
+<input type="hidden" name="visit_date" value="{{ today }}">
 <datalist id="medlist"></datalist>
 
-<div class="flex flex-wrap items-center justify-between gap-2 mb-2 px-2 py-1.5 bg-blue-50 border border-blue-200 rounded">
-  <div class="text-sm">
-    <strong class="text-blue-900">{{ patient['name'] }}</strong>
-    <span class="text-gray-600 text-xs"> · {{ patient['patient_id'] }} · {{ patient['age'] }}/{{ patient['sex'] }} · {{ patient['mobile'] }}</span>
+<!-- TOP BAR -->
+<div class="opd-header mb-3">
+  <div>
+    <div class="text-base font-bold">{{ patient['name'] }} · {{ patient['age'] or 'None' }}/{{ patient['sex'] or 'None' }}</div>
+    <div class="text-xs text-blue-200">ID {{ patient['patient_id'] }}{% if patient['mobile'] %} · {{ patient['mobile'] }}{% endif %}{% if visit_id %} · Visit {{ visit_id }}{% endif %}</div>
   </div>
   <div class="flex flex-wrap gap-1.5 items-center">
-    <a href="/referral?patient_id={{ patient['patient_id'] }}&visit_id={{ visit_id or '' }}" class="text-xs text-purple-700 underline">Referral</a>
-    <a href="/certificate?patient_id={{ patient['patient_id'] }}&visit_id={{ visit_id or '' }}" class="text-xs text-green-700 underline">Certificate</a>
-    <a href="/usg?patient_id={{ patient['patient_id'] }}&visit_id={{ visit_id or '' }}" class="text-xs text-indigo-700 underline">USG</a>
-    <a href="/queue" class="text-xs text-blue-700 underline">Queue</a>
-    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded text-sm font-bold shadow">Save & Print</button>
+    <button type="submit" class="btn-save">Save & Print</button>
+    <a href="/history?q={{ patient['patient_id'] }}" class="btn-ghost">History</a>
+    <a href="/queue" class="btn-ghost">Queue</a>
+    <a href="/referral?patient_id={{ patient['patient_id'] }}&visit_id={{ visit_id or '' }}" class="btn-ghost">Referral</a>
+    <a href="/certificate?patient_id={{ patient['patient_id'] }}&visit_id={{ visit_id or '' }}" class="btn-ghost">Cert</a>
+    <a href="/usg?patient_id={{ patient['patient_id'] }}&visit_id={{ visit_id or '' }}" class="btn-ghost">USG</a>
   </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-2 items-stretch" style="min-height: calc(100vh - 140px);">
-
-  <div class="border rounded-lg bg-slate-50 p-2 flex flex-col gap-1.5 overflow-y-auto text-sm">
-    <div class="grid grid-cols-3 gap-1">
-      <div>
-        <label class="text-[10px] font-semibold text-slate-600">Doctor</label>
-        <div class="border rounded px-1 py-0.5 bg-white text-xs truncate">{{ doctor_name or (visit.get('doctor') if visit else '') or 'Dr. Ashwin' }}</div>
-      </div>
-      <div>
-        <label class="text-[10px] font-semibold text-slate-600">Visit</label>
-        <input type="date" name="visit_date" value="{{ today }}" class="w-full border rounded px-1 py-0.5 text-xs">
-      </div>
-      <div>
-        <label class="text-[10px] font-semibold text-slate-600">Follow-up</label>
-        <input type="date" name="follow_up_date" class="w-full border rounded px-1 py-0.5 text-xs" value="{{ visit['follow_up_date'] if visit and visit['follow_up_date'] else '' }}">
-      </div>
-    </div>
-    <div class="border rounded bg-white p-1.5">
-      <div class="text-[10px] font-bold text-slate-700 mb-0.5">Vitals</div>
-      <div class="grid grid-cols-5 gap-1">
-        <div><label class="text-[9px] text-gray-500">Wt</label>
-          <input type="number" step="0.1" name="weight_kg" id="weight_kg" class="w-full border rounded px-1 py-0.5 text-xs" value="{{ visit['weight_kg'] if visit and visit['weight_kg'] else '' }}" oninput="calcBmi()"></div>
-        <div><label class="text-[9px] text-gray-500">Ht</label>
-          <input type="number" step="0.1" name="height_cm" id="height_cm" class="w-full border rounded px-1 py-0.5 text-xs" value="{{ visit['height_cm'] if visit and visit['height_cm'] else '' }}" oninput="calcBmi()"></div>
-        <div><label class="text-[9px] text-gray-500">BMI</label>
-          <div id="bmiBox" class="border rounded px-1 py-0.5 bg-gray-50 text-xs {% if ab_bmi %}text-red-600 font-bold{% endif %}">{% if bmi %}{{ bmi }}{% else %}—{% endif %}</div></div>
-        <div><label class="text-[9px] text-gray-500">BP</label>
-          <input type="text" name="bp" id="bp" placeholder="120/80" class="w-full border rounded px-1 py-0.5 text-xs {% if ab_bp %}text-red-600 font-bold{% endif %}" value="{{ visit['bp'] if visit and visit['bp'] else '' }}" oninput="checkBp()"></div>
-        <div><label class="text-[9px] text-gray-500">SpO2</label>
-          <input type="number" step="0.1" name="spo2" id="spo2" class="w-full border rounded px-1 py-0.5 text-xs {% if ab_spo2 %}text-red-600 font-bold{% endif %}" value="{{ visit['spo2'] if visit and visit['spo2'] else '' }}" oninput="checkSpo2()"></div>
-      </div>
+<!-- COLLAPSIBLE HISTORY -->
+<details class="hist mb-2 px-1">
+  <summary>▶ Allergies / past history — click to expand</summary>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+    <div>
+      <label class="field-label text-red-700">Drug allergies</label>
+      <input type="text" name="allergies" id="allergies" class="field border-red-300" placeholder="PENICILLIN, NSAID…" value="{{ patient.get('allergies') or '' }}">
+      <div id="allergyWarn" class="hidden mt-1 p-1 bg-red-100 border border-red-400 text-red-800 font-bold text-xs rounded"></div>
     </div>
     <div>
-      <label class="text-[10px] font-semibold text-red-700">Drug allergies</label>
-      <input type="text" name="allergies" id="allergies" class="w-full border border-red-300 rounded px-1.5 py-0.5 text-xs" placeholder="PENICILLIN, NSAID…" value="{{ patient.get('allergies') or '' }}">
-      <div id="allergyWarn" class="hidden mt-1 p-1 bg-red-100 border border-red-400 text-red-800 font-bold text-[10px] rounded"></div>
+      <label class="field-label">Past history</label>
+      <textarea name="past_history" rows="2" class="field">{{ patient.get('past_history') or '' }}</textarea>
     </div>
-    <div class="grid grid-cols-2 gap-1">
-      <div><label class="text-[10px] font-semibold">Past Hx</label>
-        <textarea name="past_history" rows="1" class="w-full border rounded px-1 py-0.5 text-xs">{{ patient.get('past_history') or '' }}</textarea></div>
-      <div><label class="text-[10px] font-semibold">Med Hx</label>
-        <textarea name="medical_history" rows="1" class="w-full border rounded px-1 py-0.5 text-xs">{{ patient.get('medical_history') or '' }}</textarea></div>
+    <div>
+      <label class="field-label">Medical history</label>
+      <textarea name="medical_history" rows="2" class="field">{{ patient.get('medical_history') or '' }}</textarea>
     </div>
-    {% if patient.get('sex') and patient.get('sex')|lower in ['female', 'f'] %}
-    <div class="border border-pink-200 rounded p-1 bg-pink-50/60">
-      <div class="flex justify-between text-[10px] mb-0.5">
-        <span class="font-semibold text-pink-900">Gynec/OB</span>
-        <span><a href="/obstetric/{{ patient.patient_id }}" class="text-pink-700 underline" target="_blank">OB</a> · <a href="/infertility/{{ patient.patient_id }}" class="text-violet-700 underline" target="_blank">Infertility</a></span>
+    {% if patient.get('sex') and patient.get('sex')|lower in ['female','f'] %}
+    <div class="md:col-span-3 border border-pink-200 rounded p-2 bg-pink-50">
+      <div class="flex justify-between text-xs mb-1">
+        <span class="font-semibold text-pink-900">Gynec / Obstetric</span>
+        <span><a href="/obstetric/{{ patient.patient_id }}" class="text-pink-700 underline" target="_blank">OB sheet</a> · <a href="/infertility/{{ patient.patient_id }}" class="text-violet-700 underline" target="_blank">Infertility</a></span>
       </div>
-      <div class="grid grid-cols-4 gap-1 mb-0.5">
-        <input type="date" name="lmp" value="{{ patient.get('lmp') or '' }}" class="border rounded px-0.5 py-0.5 text-[10px]" title="LMP">
-        <input type="text" value="{{ patient.get('edd') or 'EDD' }}" readonly class="border rounded px-0.5 py-0.5 text-[10px] bg-white text-gray-500">
-        <select name="blood_group" class="border rounded px-0.5 py-0.5 text-[10px]">
-          <option value="">BG</option>
-          {% for bg in ['A+','A-','B+','B-','AB+','AB-','O+','O-'] %}
-          <option value="{{ bg }}" {% if patient.get('blood_group')==bg %}selected{% endif %}>{{ bg }}</option>
-          {% endfor %}
-        </select>
-        <div class="text-[9px] text-gray-600 leading-tight self-center">G{{ patient.get('gravida') if patient.get('gravida') is not none else '—' }}P{{ patient.get('para') if patient.get('para') is not none else '—' }}A{{ patient.get('abortions') if patient.get('abortions') is not none else '—' }}L{{ patient.get('living') if patient.get('living') is not none else '—' }}</div>
+      <div class="grid grid-cols-4 gap-2">
+        <div><label class="field-label">LMP</label><input type="date" name="lmp" value="{{ patient.get('lmp') or '' }}" class="field"></div>
+        <div><label class="field-label">EDD</label><input type="text" value="{{ patient.get('edd') or '—' }}" readonly class="field bg-gray-50"></div>
+        <div><label class="field-label">Blood group</label>
+          <select name="blood_group" class="field">
+            <option value="">—</option>
+            {% for bg in ['A+','A-','B+','B-','AB+','AB-','O+','O-'] %}
+            <option value="{{ bg }}" {% if patient.get('blood_group')==bg %}selected{% endif %}>{{ bg }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="text-xs self-end pb-1">G{{ patient.get('gravida') if patient.get('gravida') is not none else '—' }} P{{ patient.get('para') if patient.get('para') is not none else '—' }} A{{ patient.get('abortions') if patient.get('abortions') is not none else '—' }} L{{ patient.get('living') if patient.get('living') is not none else '—' }}</div>
       </div>
-      <textarea name="gynec_history" rows="1" class="w-full border rounded px-1 py-0.5 text-xs" placeholder="Gynec notes">{{ patient.get('gynec_history') or '' }}</textarea>
+      <label class="field-label mt-1">Gynec notes</label>
+      <textarea name="gynec_history" rows="1" class="field">{{ patient.get('gynec_history') or '' }}</textarea>
     </div>
     {% endif %}
-    <div><label class="text-[10px] font-semibold text-slate-700">Complaints</label>
-      <textarea name="complaints" rows="2" class="w-full border rounded px-1.5 py-0.5 text-xs">{{ visit['complaints'] if visit and visit['complaints'] else '' }}</textarea></div>
-    <div><label class="text-[10px] font-semibold text-slate-700">Examination</label>
-      <textarea name="examination" rows="2" class="w-full border rounded px-1.5 py-0.5 text-xs">{{ visit['examination'] if visit and visit['examination'] else '' }}</textarea></div>
-    <div><label class="text-[10px] font-semibold text-slate-700">Diagnosis</label>
-      <input type="text" name="diagnosis" class="w-full border rounded px-1.5 py-0.5 text-xs" value="{{ visit['diagnosis'] if visit and visit['diagnosis'] else '' }}"></div>
+  </div>
+</details>
+
+<!-- 3 COLUMNS like screenshot -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-3" style="min-height: calc(100vh - 200px);">
+
+  <!-- LEFT: clinical 1-4 -->
+  <div class="lg:col-span-3 panel flex flex-col gap-3">
     <div>
-      <div class="flex items-center justify-between">
-        <label class="text-[10px] font-semibold text-slate-700">Investigations</label>
-        <button type="button" id="btnSendLab" class="text-[9px] bg-teal-700 text-white px-1.5 py-0.5 rounded font-semibold" onclick="sendToLab()">Send to Lab</button>
+      <label class="field-label"><span class="num">1 ·</span> CHIEF COMPLAINTS</label>
+      <textarea name="complaints" rows="3" class="field">{{ visit['complaints'] if visit and visit['complaints'] else '' }}</textarea>
+    </div>
+    <div>
+      <label class="field-label"><span class="num">2 ·</span> CLINICAL FINDINGS</label>
+      <textarea name="examination" rows="3" class="field">{{ visit['examination'] if visit and visit['examination'] else '' }}</textarea>
+    </div>
+    <div>
+      <label class="field-label"><span class="num">3 ·</span> DIAGNOSIS</label>
+      <input type="text" name="diagnosis" class="field" value="{{ visit['diagnosis'] if visit and visit['diagnosis'] else '' }}">
+    </div>
+    <div>
+      <label class="field-label"><span class="num">4 ·</span> ADVICE</label>
+      <textarea name="advice" rows="3" class="field">{{ visit['advice'] if visit and visit['advice'] else '' }}</textarea>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mt-auto">
+      <div>
+        <label class="field-label">Referred TO</label>
+        <input type="text" name="referral_to" class="field" placeholder="Dr." value="{{ visit['referral_to'] if visit and visit['referral_to'] else '' }}">
       </div>
+      <div>
+        <label class="field-label">Referred BY</label>
+        <input type="text" name="referral_by" class="field" placeholder="Dr." value="{{ visit['referral_by'] if visit and visit['referral_by'] else '' }}">
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: Rx + next visit -->
+  <div class="lg:col-span-5 panel flex flex-col gap-2">
+    <div class="flex flex-wrap items-center justify-between gap-1">
+      <div class="panel-title">℞ PRESCRIPTION</div>
+      <div class="flex gap-1">
+        <button type="button" onclick="loadPreviousRx()" class="text-xs bg-blue-700 text-white px-2 py-1 rounded">Load old Rx</button>
+        <select id="templateSelect" class="border rounded px-1 py-0.5 text-xs">
+          <option value="">Template…</option>
+          {% for t in templates_list %}<option value="{{ t['template_id'] }}">{{ t['template_name'] }}</option>{% endfor %}
+        </select>
+        <button type="button" onclick="applyTemplate()" class="text-xs bg-purple-600 text-white px-2 py-1 rounded">Load</button>
+        <button type="button" onclick="saveAsTemplate()" class="text-xs bg-gray-600 text-white px-2 py-1 rounded">Save tpl</button>
+      </div>
+    </div>
+    <div id="prevRxList" class="text-xs max-h-16 overflow-y-auto"></div>
+    <div class="overflow-x-auto flex-1">
+      <table class="rx-table">
+        <thead>
+          <tr>
+            <th>Medicine</th><th>Generic</th><th>Dose</th><th>Duration</th><th>Before/After Food</th><th>×</th>
+          </tr>
+        </thead>
+        <tbody id="medBody">
+          <tr>
+            <td><input type="text" name="medicine_name" list="medlist" class="med-name" autocomplete="off"></td>
+            <td><input type="text" name="generic_name" class="med-generic"></td>
+            <td><input type="text" name="dose" placeholder="1-0-1"></td>
+            <td><input type="text" name="duration" placeholder="5 DAYS" class="dur-input" oninput="recalcFollowUp()"></td>
+            <td><input type="text" name="instructions" placeholder="AFTER FOOD"></td>
+            <td class="text-center text-red-600 cursor-pointer" onclick="this.closest('tr').remove();recalcFollowUp()">×</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <button type="button" onclick="addMedicineRow()" class="text-sm text-blue-600 text-left">+ Add Medicine</button>
+
+    <div class="border border-orange-200 bg-orange-50 rounded-lg p-3 mt-1">
+      <div class="text-xs font-bold text-orange-900 mb-1">NEXT VISIT DATE (PRINTED ON RX)</div>
+      <label class="field-label">Follow-up / review on</label>
+      <div class="flex flex-wrap gap-2 items-center">
+        <input type="date" name="follow_up_date" id="follow_up_date" class="field" style="max-width:180px"
+               value="{{ visit['follow_up_date'] if visit and visit['follow_up_date'] else '' }}">
+        <button type="button" onclick="recalcFollowUp(true)" class="text-xs bg-orange-500 text-white px-3 py-1.5 rounded font-semibold">Recalc from medicines</button>
+      </div>
+      <p class="text-[10px] text-gray-600 mt-1">Default = today + longest duration (e.g. 5 DAYS → +5). Change if needed.</p>
+    </div>
+
+    <!-- compact charges under Rx -->
+    <div class="border-t pt-2">
+      <div class="panel-title">Additional charges</div>
+      <table class="rx-table">
+        <thead><tr><th>Item</th><th>₹</th><th>Qty</th><th>×</th></tr></thead>
+        <tbody id="chargeBody">
+          {% if existing_charges %}
+            {% for ch in existing_charges %}
+            <tr>
+              <td><input type="text" name="charge_item" list="chargelist" value="{{ ch.item_name }}" class="uppercase"></td>
+              <td><input type="number" step="0.01" name="charge_rate" value="{{ ch.rate }}"></td>
+              <td><input type="number" name="charge_qty" value="{{ ch.qty or 1 }}"></td>
+              <td class="text-center text-red-600 cursor-pointer" onclick="this.closest('tr').remove()">×</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td><input type="text" name="charge_item" list="chargelist" class="uppercase" placeholder="ECG / CONSULT"></td>
+              <td><input type="number" step="0.01" name="charge_rate"></td>
+              <td><input type="number" name="charge_qty" value="1"></td>
+              <td class="text-center text-red-600 cursor-pointer" onclick="this.closest('tr').remove()">×</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+      <datalist id="chargelist">
+        {% for c in charge_master %}<option value="{{ c.item_name }}" data-rate="{{ c.rate }}"></option>{% endfor %}
+        {% for p in pharmacy_items %}<option value="{{ p.label }}" data-rate="{{ p.sell_price }}"></option>{% endfor %}
+      </datalist>
+      <button type="button" onclick="addChargeRow()" class="text-xs text-blue-600 mt-1">+ Add Charge</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: vitals + lab -->
+  <div class="lg:col-span-4 panel flex flex-col gap-2">
+    <div class="panel-title">VITALS</div>
+    <div class="vital-grid">
+      <div><label class="field-label">Weight (kg)</label>
+        <input type="number" step="0.1" name="weight_kg" id="weight_kg" class="field" value="{{ visit['weight_kg'] if visit and visit['weight_kg'] else '' }}" oninput="calcBmi()"></div>
+      <div><label class="field-label">Height (cm)</label>
+        <input type="number" step="0.1" name="height_cm" id="height_cm" class="field" value="{{ visit['height_cm'] if visit and visit['height_cm'] else '' }}" oninput="calcBmi()"></div>
+      <div><label class="field-label">BMI</label>
+        <div id="bmiBox" class="field bg-gray-50 {% if ab_bmi %}text-red-600 font-bold{% endif %}">{% if bmi %}{{ bmi }}{% else %}—{% endif %}</div></div>
+      <div><label class="field-label">BP</label>
+        <input type="text" name="bp" id="bp" placeholder="120/80" class="field {% if ab_bp %}text-red-600 font-bold{% endif %}" value="{{ visit['bp'] if visit and visit['bp'] else '' }}" oninput="checkBp()"></div>
+      <div class="col-span-2"><label class="field-label">SpO2 %</label>
+        <input type="number" step="0.1" name="spo2" id="spo2" class="field {% if ab_spo2 %}text-red-600 font-bold{% endif %}" value="{{ visit['spo2'] if visit and visit['spo2'] else '' }}" oninput="checkSpo2()"></div>
+    </div>
+    <p class="text-[10px] text-gray-500">Normal: BMI 18.5–24.9 · BP <140/90 · SpO2 ≥95%</p>
+
+    <div class="lab-box">
+      <div class="flex items-center justify-between mb-1">
+        <div class="panel-title mb-0">LAB INVESTIGATIONS</div>
+        <button type="button" id="btnSendLab" onclick="sendToLab()" class="text-xs bg-teal-700 text-white px-2 py-1 rounded font-semibold">Send to Lab</button>
+      </div>
+      <p class="text-[10px] text-gray-600 mb-1">Order tests — type → choose from list → + Add → Send to Lab</p>
       <div class="flex gap-1 relative">
         <div class="flex-1 relative">
-          <input type="text" id="inv_search" class="w-full border rounded px-1 py-0.5 text-xs" placeholder="CBC, CRP…" autocomplete="off" style="text-transform:uppercase">
-          <div id="inv_suggestions" class="hidden absolute z-50 left-0 right-0 border bg-white rounded shadow max-h-28 overflow-y-auto text-[10px]"></div>
+          <input type="text" id="inv_search" class="field" placeholder="TYPE CBC, CRP, WIDAL…" autocomplete="off" style="text-transform:uppercase">
+          <div id="inv_suggestions" class="hidden absolute z-50 left-0 right-0 border bg-white rounded shadow max-h-32 overflow-y-auto text-xs"></div>
         </div>
-        <button type="button" onclick="addInvTest()" class="bg-indigo-700 text-white text-xs px-1.5 py-0.5 rounded font-bold">+</button>
+        <button type="button" onclick="addInvTest()" class="bg-indigo-700 text-white text-sm px-3 py-1 rounded font-bold">+ Add</button>
       </div>
-      <div id="inv_chips" class="flex flex-wrap gap-0.5 mt-0.5"></div>
-      <textarea name="investigations" id="investigations" rows="1" class="w-full border rounded px-1 py-0.5 text-[10px] bg-white mt-0.5" placeholder="Tests">{{ visit['investigations'] if visit and visit['investigations'] else '' }}</textarea>
-      <p id="labOrderMsg" class="text-[9px] mt-0.5 hidden"></p>
+      <div id="inv_chips" class="flex flex-wrap gap-1 mt-1"></div>
+      <textarea name="investigations" id="investigations" rows="2" class="field mt-1 bg-gray-50" placeholder="ADDED TESTS APPEAR HERE">{{ visit['investigations'] if visit and visit['investigations'] else '' }}</textarea>
+      <p id="labOrderMsg" class="text-[10px] mt-1 hidden"></p>
       {% if lab_results %}
-      <div class="mt-0.5 border border-teal-300 rounded p-0.5 bg-teal-50 max-h-14 overflow-y-auto text-[9px]">
+      <div class="mt-1 max-h-16 overflow-y-auto text-[10px]">
         {% for b in lab_results %}
         <a class="text-indigo-800 font-medium block" href="/lab/report/{{ b.batch_id }}" target="_blank">{{ b.panel_label or 'Lab' }} · {{ b.result_date }}</a>
         {% endfor %}
       </div>
       {% endif %}
     </div>
-    <div><label class="text-[10px] font-semibold text-slate-700">Advice</label>
-      <textarea name="advice" rows="2" class="w-full border rounded px-1.5 py-0.5 text-xs">{{ visit['advice'] if visit and visit['advice'] else '' }}</textarea></div>
-    <div class="grid grid-cols-2 gap-1">
-      <div><label class="text-[9px] font-medium">Referred TO</label>
-        <input type="text" name="referral_to" class="w-full border rounded px-1 py-0.5 text-xs" placeholder="Dr." value="{{ visit['referral_to'] if visit and visit['referral_to'] else '' }}"></div>
-      <div><label class="text-[9px] font-medium">Referred BY</label>
-        <input type="text" name="referral_by" class="w-full border rounded px-1 py-0.5 text-xs" placeholder="Dr." value="{{ visit['referral_by'] if visit and visit['referral_by'] else '' }}"></div>
-    </div>
-  </div>
 
-  <div class="border rounded-lg bg-white p-2 flex flex-col gap-1.5 overflow-y-auto">
-    <div class="flex flex-wrap items-center justify-between gap-1">
-      <h2 class="font-bold text-sm text-slate-800">Prescription</h2>
-      <button type="button" onclick="loadPreviousRx()" class="bg-blue-700 text-white px-2 py-0.5 rounded text-[11px] font-medium">Load old Rx</button>
+    <div class="mt-auto pt-2 border-t flex flex-wrap gap-2">
+      <button type="submit" class="btn-save flex-1 py-2">Save & Print</button>
+      <a href="/history?q={{ patient['patient_id'] }}" class="btn-ghost" style="color:#1e3a5f;border-color:#94a3b8">History</a>
+      <a href="/queue" class="btn-ghost" style="color:#1e3a5f;border-color:#94a3b8">Queue</a>
     </div>
-    <div class="flex flex-wrap items-center gap-1">
-      <select id="templateSelect" class="border rounded px-1 py-0.5 text-[11px] flex-1 min-w-0">
-        <option value="">Template…</option>
-        {% for t in templates_list %}
-        <option value="{{ t['template_id'] }}">{{ t['template_name'] }}</option>
-        {% endfor %}
-      </select>
-      <button type="button" onclick="applyTemplate()" class="bg-purple-600 text-white px-2 py-0.5 rounded text-[11px]">Load</button>
-      <button type="button" onclick="saveAsTemplate()" class="bg-gray-600 text-white px-2 py-0.5 rounded text-[11px]">Save as template</button>
-    </div>
-    <div id="prevRxList" class="text-xs max-h-20 overflow-y-auto"></div>
-    <div class="overflow-x-auto flex-1">
-      <table class="w-full text-xs border">
-        <thead class="bg-gray-100 sticky top-0">
-          <tr>
-            <th class="border px-1 py-0.5 text-left">Medicine</th>
-            <th class="border px-1 py-0.5 text-left">Generic</th>
-            <th class="border px-1 py-0.5 text-left">Dose</th>
-            <th class="border px-1 py-0.5 text-left">Dur</th>
-            <th class="border px-1 py-0.5 text-left">Food</th>
-            <th class="border px-1 py-0.5">×</th>
-          </tr>
-        </thead>
-        <tbody id="medBody">
-          <tr>
-            <td class="border px-0.5 py-0.5"><input type="text" name="medicine_name" list="medlist" class="w-full px-1 py-0.5 med-name text-xs" autocomplete="off"></td>
-            <td class="border px-0.5 py-0.5"><input type="text" name="generic_name" class="w-full px-1 py-0.5 med-generic text-xs"></td>
-            <td class="border px-0.5 py-0.5"><input type="text" name="dose" placeholder="1-0-1" class="w-full px-1 py-0.5 text-xs"></td>
-            <td class="border px-0.5 py-0.5"><input type="text" name="duration" placeholder="5D" class="w-full px-1 py-0.5 text-xs"></td>
-            <td class="border px-0.5 py-0.5"><input type="text" name="instructions" placeholder="AF" class="w-full px-1 py-0.5 text-xs"></td>
-            <td class="border px-0.5 py-0.5 text-center text-red-600 cursor-pointer" onclick="this.closest('tr').remove()">×</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <button type="button" onclick="addMedicineRow()" class="text-xs text-blue-600 text-left">+ Add Medicine</button>
-  </div>
-
-  <div class="border rounded-lg bg-slate-50 p-2 flex flex-col gap-1.5 overflow-y-auto">
-    <h2 class="font-bold text-sm text-slate-800">Charges / Billing</h2>
-    <p class="text-[9px] text-gray-500 -mt-1">PHARMACY · ECG · dressing · consult</p>
-    <table class="w-full text-xs border">
-      <thead class="bg-gray-100">
-        <tr>
-          <th class="border px-1 py-0.5 text-left">Item</th>
-          <th class="border px-1 py-0.5 text-left">₹</th>
-          <th class="border px-1 py-0.5 text-left">Qty</th>
-          <th class="border px-1 py-0.5">×</th>
-        </tr>
-      </thead>
-      <tbody id="chargeBody">
-        {% if existing_charges %}
-          {% for ch in existing_charges %}
-          <tr>
-            <td class="border px-0.5 py-0.5"><input type="text" name="charge_item" list="chargelist" value="{{ ch.item_name }}" class="w-full px-1 py-0.5 uppercase text-xs"></td>
-            <td class="border px-0.5 py-0.5"><input type="number" step="0.01" name="charge_rate" value="{{ ch.rate }}" class="w-full px-1 py-0.5 text-xs"></td>
-            <td class="border px-0.5 py-0.5"><input type="number" name="charge_qty" value="{{ ch.qty or 1 }}" class="w-full px-1 py-0.5 text-xs"></td>
-            <td class="border px-0.5 py-0.5 text-center text-red-600 cursor-pointer" onclick="this.closest('tr').remove()">×</td>
-          </tr>
-          {% endfor %}
-        {% else %}
-          <tr>
-            <td class="border px-0.5 py-0.5"><input type="text" name="charge_item" list="chargelist" class="w-full px-1 py-0.5 uppercase text-xs" placeholder="PHARMACY / ECG"></td>
-            <td class="border px-0.5 py-0.5"><input type="number" step="0.01" name="charge_rate" class="w-full px-1 py-0.5 text-xs"></td>
-            <td class="border px-0.5 py-0.5"><input type="number" name="charge_qty" value="1" class="w-full px-1 py-0.5 text-xs"></td>
-            <td class="border px-0.5 py-0.5 text-center text-red-600 cursor-pointer" onclick="this.closest('tr').remove()">×</td>
-          </tr>
-        {% endif %}
-      </tbody>
-    </table>
-    <datalist id="chargelist">
-      {% for c in charge_master %}<option value="{{ c.item_name }}" data-rate="{{ c.rate }}"></option>{% endfor %}
-      {% for p in pharmacy_items %}<option value="{{ p.label }}" data-rate="{{ p.sell_price }}" data-stock="{{ p.stock_id }}"></option>{% endfor %}
-    </datalist>
-    <button type="button" onclick="addChargeRow()" class="text-xs text-blue-600 text-left">+ Add Charge</button>
-    {% if pharmacy_items %}<p class="text-[9px] text-gray-400">{{ pharmacy_items|length }} pharmacy items in stock</p>{% endif %}
-    <div class="border-t pt-1">
-      <h2 class="font-semibold text-xs text-slate-800">Patient files</h2>
-      <div id="attachForm">
-        <input type="hidden" id="attach_patient_id" value="{{ patient['patient_id'] }}">
-        <input type="hidden" id="attach_visit_id" value="{{ visit_id or '' }}">
-        <div class="flex gap-1 items-center mt-0.5">
-          <input type="file" id="attachFile" accept="image/*,.pdf,application/pdf" class="flex-1 text-[9px] border rounded px-0.5 py-0.5 bg-white min-w-0">
-          <input type="text" id="attachDesc" placeholder="Note" class="w-16 border rounded px-0.5 py-0.5 text-[9px]">
-          <button type="button" onclick="uploadAttachment(event)" class="bg-teal-600 text-white px-1.5 py-0.5 rounded text-[9px]">Up</button>
-        </div>
-        <p id="attachMsg" class="text-[9px] text-gray-600"></p>
-      </div>
-      <div id="attachList" class="max-h-12 overflow-y-auto text-[9px] mt-0.5">
-        {% if attachments %}<ul>{% for a in attachments %}<li><a class="text-blue-700 underline" href="/patient-files/{{ a.rel_path }}" target="_blank">{{ a.file_name }}</a></li>{% endfor %}</ul>
-        {% else %}<span class="text-gray-400">No files</span>{% endif %}
-      </div>
-    </div>
-    <div class="border rounded p-1.5 bg-indigo-50">
-      <div class="font-semibold text-indigo-900 text-[10px] mb-0.5">Print options</div>
-      <div class="grid grid-cols-2 gap-x-1 gap-y-0 text-[9px]" id="printOpts">
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_allergies" data-flag="show_allergies" value="1" checked> Allergies</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_past_history" data-flag="show_past_history" value="1" checked> Past Hx</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_medical_history" data-flag="show_medical_history" value="1" checked> Med Hx</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_gynec_history" data-flag="show_gynec_history" value="1" checked> Gynec</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_obstetric" data-flag="show_obstetric" value="1" checked> Obstetric</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_complaints" data-flag="show_complaints" value="1" checked> Complaints</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_examination" data-flag="show_examination" value="1" checked> Exam</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_diagnosis" data-flag="show_diagnosis" value="1" checked> Dx</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_investigations" data-flag="show_investigations" value="1" checked> Inv</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_advice" data-flag="show_advice" value="1" checked> Advice</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_follow_up" data-flag="show_follow_up" value="1" checked> F/U</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_referral" data-flag="show_referral" value="1" checked> Referral</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_vitals" data-flag="show_vitals" value="1" checked> Vitals</label>
-        <label class="flex items-center gap-0.5"><input type="checkbox" name="show_infertility" data-flag="show_infertility" value="1"> Infertility</label>
-      </div>
-    </div>
-    <div class="mt-auto flex flex-col gap-1 pt-1 border-t">
-      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white w-full py-2.5 rounded-lg font-bold text-base shadow">Save & Print</button>
-      <div class="flex gap-1">
-        <a href="/history?q={{ patient['patient_id'] }}" class="flex-1 text-center bg-gray-300 px-2 py-1.5 rounded text-xs">History</a>
-        <a href="/queue" class="flex-1 text-center bg-blue-100 text-blue-800 px-2 py-1.5 rounded text-xs">Queue</a>
-      </div>
-    </div>
+    <p class="text-[10px] text-gray-500">Saves and opens Rx print</p>
   </div>
 </div>
 </form>
+</div>
+
 {% else %}
 <div class="bg-yellow-50 border border-yellow-300 rounded p-4">No patient selected. Go to <a href="/queue" class="underline">Queue</a>.</div>
 {% endif %}
 
 <script>
-function calcBmi(){var w=parseFloat(document.getElementById('weight_kg').value),h=parseFloat(document.getElementById('height_cm').value),box=document.getElementById('bmiBox');if(!w||!h||h<=0){box.textContent='—';return;}var bmi=(w/Math.pow(h/100,2)).toFixed(1),label='N',ab=false;if(bmi<18.5){label='U';ab=true;}else if(bmi<25){label='N';}else if(bmi<30){label='OW';ab=true;}else{label='OB';ab=true;}box.textContent=bmi+' '+label;box.className=ab?'border rounded px-1 py-0.5 bg-gray-50 text-xs text-red-600 font-bold':'border rounded px-1 py-0.5 bg-gray-50 text-xs';}
-function checkBp(){var el=document.getElementById('bp'),v=(el.value||'').replace(' ',''),ab=false;try{var p=v.split('/'),s=parseInt(p[0]),d=parseInt(p[1]||0);ab=(s>=140||d>=90||s<90||d<60);}catch(e){}el.className=ab?'w-full border rounded px-1 py-0.5 text-xs text-red-600 font-bold':'w-full border rounded px-1 py-0.5 text-xs';}
-function checkSpo2(){var el=document.getElementById('spo2'),v=parseFloat(el.value),ab=(!isNaN(v)&&v<95);el.className=ab?'w-full border rounded px-1 py-0.5 text-xs text-red-600 font-bold':'w-full border rounded px-1 py-0.5 text-xs';}
-function addMedicineRow(med){var tbody=document.getElementById('medBody'),row=document.createElement('tr'),brand=(med&&med.brand)||'',generic=(med&&med.generic)||'',dose=(med&&med.dose)||'',duration=(med&&med.duration)||'',instructions=(med&&med.instructions)||'';row.innerHTML='<td class="border px-0.5 py-0.5"><input type="text" name="medicine_name" list="medlist" class="w-full px-1 py-0.5 med-name text-xs" autocomplete="off" value="'+brand+'"></td><td class="border px-0.5 py-0.5"><input type="text" name="generic_name" class="w-full px-1 py-0.5 med-generic text-xs" value="'+generic+'"></td><td class="border px-0.5 py-0.5"><input type="text" name="dose" placeholder="1-0-1" class="w-full px-1 py-0.5 text-xs" value="'+dose+'"></td><td class="border px-0.5 py-0.5"><input type="text" name="duration" placeholder="5D" class="w-full px-1 py-0.5 text-xs" value="'+duration+'"></td><td class="border px-0.5 py-0.5"><input type="text" name="instructions" placeholder="AF" class="w-full px-1 py-0.5 text-xs" value="'+instructions+'"></td><td class="border px-0.5 py-0.5 text-center text-red-600 cursor-pointer" onclick="this.closest(\'tr\').remove()">×</td>';tbody.appendChild(row);}
+function calcBmi(){var w=parseFloat(document.getElementById('weight_kg').value),h=parseFloat(document.getElementById('height_cm').value),box=document.getElementById('bmiBox');if(!w||!h||h<=0){box.textContent='—';return;}var bmi=(w/Math.pow(h/100,2)).toFixed(1),ab=(bmi<18.5||bmi>=25);box.textContent=bmi;box.className='field bg-gray-50'+(ab?' text-red-600 font-bold':'');}
+function checkBp(){var el=document.getElementById('bp'),v=(el.value||'').replace(' ',''),ab=false;try{var p=v.split('/'),s=parseInt(p[0]),d=parseInt(p[1]||0);ab=(s>=140||d>=90||s<90||d<60);}catch(e){}el.className='field'+(ab?' text-red-600 font-bold':'');}
+function checkSpo2(){var el=document.getElementById('spo2'),v=parseFloat(el.value),ab=(!isNaN(v)&&v<95);el.className='field'+(ab?' text-red-600 font-bold':'');}
+function parseDays(str){if(!str)return 0;var m=String(str).toUpperCase().match(/(\d+)/);return m?parseInt(m[1],10):0;}
+function recalcFollowUp(force){var maxd=0;document.querySelectorAll('input[name="duration"]').forEach(function(el){var d=parseDays(el.value);if(d>maxd)maxd=d;});var fu=document.getElementById('follow_up_date');if(!fu)return;if(!force&&fu.value)return;if(maxd<=0)return;var t=new Date();t.setDate(t.getDate()+maxd);fu.value=t.toISOString().slice(0,10);}
+function addMedicineRow(med){var tbody=document.getElementById('medBody'),row=document.createElement('tr'),brand=(med&&med.brand)||'',generic=(med&&med.generic)||'',dose=(med&&med.dose)||'',duration=(med&&med.duration)||'',instructions=(med&&med.instructions)||'';row.innerHTML='<td><input type="text" name="medicine_name" list="medlist" class="med-name" autocomplete="off" value="'+brand+'"></td><td><input type="text" name="generic_name" class="med-generic" value="'+generic+'"></td><td><input type="text" name="dose" placeholder="1-0-1" value="'+dose+'"></td><td><input type="text" name="duration" placeholder="5 DAYS" class="dur-input" value="'+duration+'" oninput="recalcFollowUp()"></td><td><input type="text" name="instructions" placeholder="AFTER FOOD" value="'+instructions+'"></td><td class="text-center text-red-600 cursor-pointer" onclick="this.closest(\'tr\').remove();recalcFollowUp()">×</td>';tbody.appendChild(row);}
 function fillChargeRate(input){if(!input)return;var val=(input.value||'').trim().toUpperCase();input.value=val;var rateInput=input.closest('tr').querySelector('input[name="charge_rate"]');if(!rateInput)return;document.querySelectorAll('#chargelist option').forEach(function(o){if(o.value.toUpperCase()===val&&o.dataset.rate)rateInput.value=o.dataset.rate;});}
 document.addEventListener('input',function(e){if(e.target&&e.target.name==='charge_item')fillChargeRate(e.target);});
-function addChargeRow(){var tbody=document.getElementById('chargeBody'),row=document.createElement('tr');row.innerHTML='<td class="border px-0.5 py-0.5"><input type="text" name="charge_item" list="chargelist" class="w-full px-1 py-0.5 uppercase text-xs" placeholder="PHARMACY…"></td><td class="border px-0.5 py-0.5"><input type="number" step="0.01" name="charge_rate" class="w-full px-1 py-0.5 text-xs"></td><td class="border px-0.5 py-0.5"><input type="number" name="charge_qty" value="1" class="w-full px-1 py-0.5 text-xs"></td><td class="border px-0.5 py-0.5 text-center text-red-600 cursor-pointer" onclick="this.closest(\'tr\').remove()">×</td>';tbody.appendChild(row);}
+function addChargeRow(){var tbody=document.getElementById('chargeBody'),row=document.createElement('tr');row.innerHTML='<td><input type="text" name="charge_item" list="chargelist" class="uppercase" placeholder="ECG / CONSULT"></td><td><input type="number" step="0.01" name="charge_rate"></td><td><input type="number" name="charge_qty" value="1"></td><td class="text-center text-red-600 cursor-pointer" onclick="this.closest(\'tr\').remove()">×</td>';tbody.appendChild(row);}
 function fillGeneric(input){var brand=input.value.trim().toUpperCase();if(!brand)return;var genericInput=input.closest('tr').querySelector('.med-generic');fetch('/api/medicines?q='+encodeURIComponent(brand)).then(function(r){return r.json();}).then(function(list){if(!list||list.error)return;for(var i=0;i<list.length;i++){if((list[i].brand||'').toUpperCase()===brand&&list[i].generic){genericInput.value=list[i].generic;break;}}});}
 var prevRxData=[];
-function loadPreviousRx(){var pid=document.querySelector('input[name="patient_id"]').value,vid=document.querySelector('input[name="visit_id"]').value||'';if(!pid)return;fetch('/api/previous-rx?patient_id='+encodeURIComponent(pid)+'&exclude_visit='+encodeURIComponent(vid)).then(function(r){return r.json();}).then(function(list){prevRxData=list||[];var box=document.getElementById('prevRxList');if(!prevRxData.length){box.innerHTML='<p class="text-gray-500 text-xs">No previous Rx</p>';return;}var html='';prevRxData.forEach(function(v,vi){html+='<div class="border rounded p-1 mb-1 bg-white text-[10px]"><div class="font-medium mb-0.5">'+v.visit_date+' · '+(v.diagnosis||'')+'</div>';v.medicines.forEach(function(m,mi){html+='<label class="flex items-start gap-1 cursor-pointer"><input type="checkbox" class="prev-med mt-0.5" data-vi="'+vi+'" data-mi="'+mi+'"><span><b>'+m.brand+'</b> '+(m.dose||'')+'</span></label>';});html+='</div>';});html+='<button type="button" onclick="addSelectedPrev()" class="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Add selected</button>';box.innerHTML=html;});}
-function addSelectedPrev(){var checks=document.querySelectorAll('.prev-med:checked');if(!checks.length){alert('Select at least one medicine');return;}checks.forEach(function(ch){addMedicineRow(prevRxData[parseInt(ch.dataset.vi)].medicines[parseInt(ch.dataset.mi)]);});}
+function loadPreviousRx(){var pid=document.querySelector('input[name="patient_id"]').value,vid=document.querySelector('input[name="visit_id"]').value||'';if(!pid)return;fetch('/api/previous-rx?patient_id='+encodeURIComponent(pid)+'&exclude_visit='+encodeURIComponent(vid)).then(function(r){return r.json();}).then(function(list){prevRxData=list||[];var box=document.getElementById('prevRxList');if(!prevRxData.length){box.innerHTML='<p class="text-gray-500">No previous Rx</p>';return;}var html='';prevRxData.forEach(function(v,vi){html+='<div class="border rounded p-1 mb-1 bg-white text-[10px]"><div class="font-medium">'+v.visit_date+' · '+(v.diagnosis||'')+'</div>';v.medicines.forEach(function(m,mi){html+='<label class="flex gap-1 cursor-pointer"><input type="checkbox" class="prev-med" data-vi="'+vi+'" data-mi="'+mi+'"><span><b>'+m.brand+'</b> '+(m.dose||'')+'</span></label>';});html+='</div>';});html+='<button type="button" onclick="addSelectedPrev()" class="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Add selected</button>';box.innerHTML=html;});}
+function addSelectedPrev(){var checks=document.querySelectorAll('.prev-med:checked');if(!checks.length){alert('Select at least one');return;}checks.forEach(function(ch){addMedicineRow(prevRxData[parseInt(ch.dataset.vi)].medicines[parseInt(ch.dataset.mi)]);});recalcFollowUp();}
 function checkAllergies(){var pid=document.querySelector('input[name="patient_id"]');if(!pid)return;var names=[];document.querySelectorAll('input[name="medicine_name"]').forEach(function(el){if(el.value.trim())names.push(el.value.trim());});if(!names.length){document.getElementById('allergyWarn').classList.add('hidden');return;}fetch('/api/allergy-check?patient_id='+encodeURIComponent(pid.value)+'&medicines='+encodeURIComponent(names.join(','))).then(function(r){return r.json();}).then(function(data){var box=document.getElementById('allergyWarn');if(data.warnings&&data.warnings.length){box.innerHTML=data.warnings.join('<br>');box.classList.remove('hidden');}else box.classList.add('hidden');});}
-document.addEventListener('change',function(e){if(e.target.name==='medicine_name'||e.target.name==='generic_name')checkAllergies();if(e.target.name==='medicine_name')fillGeneric(e.target);if(e.target.name==='charge_item')fillChargeRate(e.target);});
+document.addEventListener('change',function(e){if(e.target.name==='medicine_name'||e.target.name==='generic_name')checkAllergies();if(e.target.name==='medicine_name')fillGeneric(e.target);});
 document.addEventListener('blur',function(e){if(e.target.name==='medicine_name')fillGeneric(e.target);},true);
 document.addEventListener('input',function(e){if(e.target.name!=='medicine_name')return;var q=e.target.value.trim();if(q.length<2)return;fetch('/api/medicines?q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(list){var dl=document.getElementById('medlist');if(!dl||!list||list.error)return;dl.innerHTML='';list.forEach(function(item){var o=document.createElement('option');o.value=item.brand;dl.appendChild(o);});});});
-function applyTemplate(){var id=document.getElementById('templateSelect').value;if(!id)return;fetch('/api/template/'+id).then(function(r){return r.json();}).then(function(data){if(!data.medicines)return;document.getElementById('medBody').innerHTML='';data.medicines.forEach(function(m){addMedicineRow(m);});if(!data.medicines.length)addMedicineRow();});}
+function applyTemplate(){var id=document.getElementById('templateSelect').value;if(!id)return;fetch('/api/template/'+id).then(function(r){return r.json();}).then(function(data){if(!data.medicines)return;document.getElementById('medBody').innerHTML='';data.medicines.forEach(function(m){addMedicineRow(m);});if(!data.medicines.length)addMedicineRow();recalcFollowUp(true);});}
 function saveAsTemplate(){var name=prompt('Template name (e.g. FLU):');if(!name)return;var meds=[];document.querySelectorAll('#medBody tr').forEach(function(tr){var inputs=tr.querySelectorAll('input');if(!inputs[0].value.trim())return;meds.push({brand:inputs[0].value.trim(),generic:inputs[1].value.trim(),dose:inputs[2].value.trim(),duration:inputs[3].value.trim(),instructions:inputs[4].value.trim()});});fetch('/api/template/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,medicines:meds})}).then(function(r){return r.json();}).then(function(res){alert(res.ok?'Saved: '+name.toUpperCase():'Error');});}
-function printRxSelected(){var visitId="{{ visit_id }}";if(!visitId||visitId==='None'||visitId===''){alert('Please Save Consultation first, then print.');return;}var params=['lang=en'];document.querySelectorAll('#printOpts input[type=checkbox]').forEach(function(cb){var flag=cb.dataset.flag||cb.name;if(flag)params.push(flag+'='+(cb.checked?'1':'0'));});window.open('/print/rx/'+visitId+'?'+params.join('&'),'_blank');}
-(function(){var KEY='rx_print_opts_v1',box=document.getElementById('printOpts');if(!box)return;var cbs=box.querySelectorAll('input[data-flag]');try{var saved=JSON.parse(localStorage.getItem(KEY)||'null');if(saved&&typeof saved==='object'){cbs.forEach(function(cb){if(Object.prototype.hasOwnProperty.call(saved,cb.dataset.flag))cb.checked=!!saved[cb.dataset.flag];});}}catch(e){}function save(){var o={};cbs.forEach(function(cb){o[cb.dataset.flag]=!!cb.checked;});try{localStorage.setItem(KEY,JSON.stringify(o));}catch(e){}}cbs.forEach(function(cb){cb.addEventListener('change',save);});})();
+function printRxSelected(){var visitId="{{ visit_id }}";if(!visitId||visitId==='None'||visitId===''){alert('Save first, then print.');return;}window.open('/print/rx/'+visitId+'?lang=en&show_allergies=1&show_past_history=1&show_medical_history=1&show_complaints=1&show_examination=1&show_diagnosis=1&show_investigations=1&show_advice=1&show_follow_up=1&show_referral=1&show_vitals=1','_blank');}
 window.__invList=[];window.__invPick=null;
-function renderInvChips(){var box=document.getElementById('inv_chips'),ta=document.getElementById('investigations');if(!box)return;box.innerHTML=window.__invList.map(function(label,i){return '<span class="inline-flex items-center gap-0.5 bg-teal-100 text-teal-900 text-[9px] px-1 py-0.5 rounded">'+label+' <button type="button" class="text-red-600 font-bold" onclick="removeInv('+i+')">×</button></span>';}).join('');if(ta)ta.value=window.__invList.join(' ');}
+function renderInvChips(){var box=document.getElementById('inv_chips'),ta=document.getElementById('investigations');if(!box)return;box.innerHTML=window.__invList.map(function(label,i){return '<span class="inline-flex items-center gap-0.5 bg-teal-100 text-teal-900 text-[10px] px-1.5 py-0.5 rounded">'+label+' <button type="button" class="text-red-600 font-bold" onclick="removeInv('+i+')">×</button></span>';}).join('');if(ta)ta.value=window.__invList.join(' ');}
 function removeInv(i){window.__invList.splice(i,1);renderInvChips();}
 function addInvTest(){var label=null;if(window.__invPick&&window.__invPick.label)label=window.__invPick.label;else{var s=document.getElementById('inv_search');if(s&&s.value.trim())label=s.value.trim().toUpperCase();}if(!label){alert('Type a test and choose from list');return;}var up=label.toUpperCase();for(var i=0;i<window.__invList.length;i++){if(String(window.__invList[i]).toUpperCase()===up){alert('Already added');return;}}window.__invList.push(label);window.__invPick=null;var s=document.getElementById('inv_search');if(s)s.value='';var sug=document.getElementById('inv_suggestions');if(sug)sug.classList.add('hidden');renderInvChips();}
-function sendToLab(){var msg=document.getElementById('labOrderMsg'),text=(window.__invList&&window.__invList.length)?window.__invList.join(' '):((document.getElementById('investigations')||{}).value||'').trim();if(!text){alert('Add at least one test first');return;}var patientId=(document.querySelector('input[name="patient_id"]')||{}).value||'',visitId=(document.querySelector('input[name="visit_id"]')||{}).value||'';if(!patientId){alert('No patient');return;}var btn=document.getElementById('btnSendLab');if(btn){btn.disabled=true;btn.textContent='…';}fetch('/api/lab/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patient_id:patientId,visit_id:visitId||null,ordered_text:text})}).then(function(r){return r.json();}).then(function(res){if(btn){btn.disabled=false;btn.textContent='Send to Lab';}if(msg)msg.classList.remove('hidden');if(res&&res.ok){if(msg){msg.className='text-[9px] mt-0.5 text-green-700 font-semibold';msg.textContent='Sent ✓ '+(res.order_id||'');}}else{var err=(res&&res.error)?res.error:'Failed';if(msg){msg.className='text-[9px] mt-0.5 text-red-600';msg.textContent=err;}alert('Not sent: '+err);}}).catch(function(){if(btn){btn.disabled=false;btn.textContent='Send to Lab';}alert('Network error');});}
+function sendToLab(){var msg=document.getElementById('labOrderMsg'),text=(window.__invList&&window.__invList.length)?window.__invList.join(' '):((document.getElementById('investigations')||{}).value||'').trim();if(!text){alert('Add at least one test first');return;}var patientId=(document.querySelector('input[name="patient_id"]')||{}).value||'',visitId=(document.querySelector('input[name="visit_id"]')||{}).value||'';if(!patientId){alert('No patient');return;}var btn=document.getElementById('btnSendLab');if(btn){btn.disabled=true;btn.textContent='…';}fetch('/api/lab/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patient_id:patientId,visit_id:visitId||null,ordered_text:text})}).then(function(r){return r.json();}).then(function(res){if(btn){btn.disabled=false;btn.textContent='Send to Lab';}if(msg)msg.classList.remove('hidden');if(res&&res.ok){if(msg){msg.className='text-[10px] mt-1 text-green-700 font-semibold';msg.textContent='Sent ✓ '+(res.order_id||'');}}else{var err=(res&&res.error)?res.error:'Failed';if(msg){msg.className='text-[10px] mt-1 text-red-600';msg.textContent=err;}alert('Not sent: '+err);}}).catch(function(){if(btn){btn.disabled=false;btn.textContent='Send to Lab';}alert('Network error');});}
 document.addEventListener('DOMContentLoaded',function(){var ta=document.getElementById('investigations');if(ta&&ta.value.trim()&&window.__invList.length===0){window.__invList=ta.value.split(/\s+/).filter(Boolean);renderInvChips();}var s=document.getElementById('inv_search'),sug=document.getElementById('inv_suggestions');if(!s||!sug)return;var timer=null;s.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(function(){var q=s.value.trim();if(q.length<1){sug.classList.add('hidden');return;}fetch('/api/lab/search?q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(data){if(!data||!data.length){sug.innerHTML='<div class="px-2 py-1 text-gray-500">No match</div>';sug.classList.remove('hidden');return;}sug.innerHTML=data.map(function(item){return '<div class="px-2 py-1 hover:bg-teal-50 cursor-pointer border-b inv-sug-item" data-label="'+String(item.label).replace(/"/g,'"')+'"><strong>'+item.label+'</strong></div>';}).join('');sug.classList.remove('hidden');sug.querySelectorAll('.inv-sug-item').forEach(function(el){el.addEventListener('click',function(){window.__invPick={label:this.getAttribute('data-label')};s.value=window.__invPick.label;sug.classList.add('hidden');addInvTest();});});});},180);});s.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addInvTest();}});});
-function uploadAttachment(event){if(event&&event.preventDefault)event.preventDefault();var fileInput=document.getElementById('attachFile'),msg=document.getElementById('attachMsg');if(!fileInput||!fileInput.files||!fileInput.files[0]){alert('Choose a file first');return false;}var fd=new FormData();fd.append('patient_id',(document.getElementById('attach_patient_id')||{}).value||'');fd.append('visit_id',(document.getElementById('attach_visit_id')||{}).value||'');fd.append('file',fileInput.files[0]);var desc=document.getElementById('attachDesc');if(desc)fd.append('description',desc.value||'');if(msg)msg.textContent='Uploading…';fetch('/opd/attach',{method:'POST',body:fd}).then(function(r){return r.json().catch(function(){return{ok:false};});}).then(function(res){if(res&&res.ok){if(msg)msg.textContent='Uploaded ✓';location.reload();}else alert('Upload failed');}).catch(function(){alert('Network error');});return false;}
-function opdBeforeSave(){try{if(window.__invList&&window.__invList.length){var ta=document.getElementById('investigations');if(ta)ta.value=window.__invList.join(' ');}}catch(e){}var btn=document.querySelector('#opdForm button[type=submit]');if(btn){btn.disabled=true;btn.textContent='Saving…';}return true;}
+function opdBeforeSave(){try{if(window.__invList&&window.__invList.length){var ta=document.getElementById('investigations');if(ta)ta.value=window.__invList.join(' ');}}catch(e){}return true;}
 </script>
 {% endblock %}
